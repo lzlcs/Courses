@@ -153,8 +153,16 @@ def autocorrect(typed_word, word_list, diff_function, limit):
     """
     # BEGIN PROBLEM 5
     "*** YOUR CODE HERE ***"
+    
+    val, res = 1e9, typed_word
+    for x in word_list:
+        if (x == typed_word):
+            return x
+        tmp = diff_function(typed_word, x, limit)
+        if (tmp <= limit and tmp < val):
+            val, res = tmp, x
+    return res
     # END PROBLEM 5
-
 
 def feline_fixes(typed, source, limit):
     """A diff function for autocorrect that determines how many letters
@@ -179,7 +187,17 @@ def feline_fixes(typed, source, limit):
     5
     """
     # BEGIN PROBLEM 6
-    assert False, 'Remove this line'
+    def my_fixed(a, b, l, res):
+        if (l < 0):
+            return res
+        if (res > limit):
+            return limit + 1
+        return my_fixed(a, b, l - 1, res + (a[l] != b[l]))
+        
+    length = min(len(typed), len(source))
+    delta = abs(len(typed) - len(source))
+
+    return my_fixed(typed, source, length - 1, 0) + delta
     # END PROBLEM 6
 
 
@@ -198,28 +216,39 @@ def minimum_mewtations(start, goal, limit):
     >>> minimum_mewtations("ckiteus", "kittens", big_limit) # ckiteus -> kiteus -> kitteus -> kittens
     3
     """
-    assert False, 'Remove this line'
-    if ______________:  # Fill in the condition
-        # BEGIN
-        "*** YOUR CODE HERE ***"
-        # END
-    elif ___________:  # Feel free to remove or add additional cases
-        # BEGIN
-        "*** YOUR CODE HERE ***"
-        # END
-    else:
-        add = ...  # Fill in these lines
-        remove = ...
-        substitute = ...
-        # BEGIN
-        "*** YOUR CODE HERE ***"
-        # END
+    def my_fun(x, y, a, b, lim, res):
+        if (res > lim):
+            return lim + 1
+        if (a >= len(x) or b >= len(y)):
+            return res + abs((len(x) - a) - (len(y) - b))
+         
+        add = my_fun(x, y, a, b + 1, lim, res + 1)
+        rem = my_fun(x, y, a + 1, b, lim, res + 1)
+        sub = my_fun(x, y, a + 1, b + 1, lim, res + int(x[a] != y[b]))
+
+        return min(add, rem, sub)
+
+    return my_fun(start, goal, 0, 0, limit, 0)
+
+# print(minimum_mewtations("ckiteus", "kittens", 10))
 
 
 def final_diff(typed, source, limit):
     """A diff function that takes in a string TYPED, a string SOURCE, and a number LIMIT.
     If you implement this function, it will be used."""
-    assert False, 'Remove this line to use your final_diff function.'
+    def my_fun(x, y, a, b, lim, res):
+        if (res > lim):
+            return lim + 1
+        if (a >= len(x) or b >= len(y)):
+            return res + abs((len(x) - a) - (len(y) - b))
+         
+        add = my_fun(x, y, a, b + 1, lim, res + 1)
+        rem = my_fun(x, y, a + 1, b, lim, res + 1)
+        sub = my_fun(x, y, a + 1, b + 1, lim, res + int(x[a] != y[b]))
+
+        return min(add, rem, sub)
+
+    return my_fun(typed, source, 0, 0, limit, 0)
 
 
 FINAL_DIFF_LIMIT = 6  # REPLACE THIS WITH YOUR LIMIT
@@ -255,6 +284,17 @@ def report_progress(typed, prompt, user_id, upload):
     """
     # BEGIN PROBLEM 8
     "*** YOUR CODE HERE ***"
+    correct, tot = 0, len(prompt)
+    for i in range(min(len(typed), len(prompt))):
+        if (typed[i] == prompt[i]):
+            correct = correct + 1
+        else:
+            break
+
+    res = correct / tot
+    upload({ 'id': user_id, 'progress': res })
+    return res
+
     # END PROBLEM 8
 
 
@@ -277,6 +317,13 @@ def time_per_word(words, times_per_player):
     """
     # BEGIN PROBLEM 9
     "*** YOUR CODE HERE ***"
+    res = []
+    for i in range(len(times_per_player)):
+        res += [[]]
+        for j in range(1, len(times_per_player[i])):
+            res[i] += [times_per_player[i][j] - times_per_player[i][j - 1]]
+            
+    return match(words, res)
     # END PROBLEM 9
 
 
@@ -297,8 +344,20 @@ def fastest_words(match):
     """
     player_indices = range(len(get_all_times(match)))  # contains an *index* for each player
     word_indices = range(len(get_all_words(match)))    # contains an *index* for each word
+    players, words = get_all_times(match), get_all_words(match)
     # BEGIN PROBLEM 10
     "*** YOUR CODE HERE ***"
+    res = []
+    for i in player_indices:
+        res += [[]]
+    for i in word_indices:
+        val, who = 1e9, -1
+        for j in player_indices:
+            if (players[j][i] < val):
+                val, who = players[j][i], j
+        res[who] += [words[i]]
+    return res
+
     # END PROBLEM 10
 
 
