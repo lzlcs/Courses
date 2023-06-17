@@ -1,5 +1,5 @@
 # Courses
-Archive my labs and hws during my studies.
+Archive my labs, hws and projects during my studies.
 
 # Lists
 
