@@ -142,3 +142,9 @@ class MuProcedure(Procedure):
     def __repr__(self):
         return 'MuProcedure({0}, {1})'.format(
             repr(self.formals), repr(self.body))
+
+
+class MacroProcedure(LambdaProcedure):
+    """A procedure defined by a define-macro form."""
+    
+    

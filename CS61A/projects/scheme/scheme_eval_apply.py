@@ -97,13 +97,15 @@ def eval_all(expressions, env):
     2
     """
     # BEGIN PROBLEM 6
-    res = None
-    cur_exp = expressions
-    while (cur_exp != nil):
-        res = scheme_eval(cur_exp.first, env)
-        cur_exp = cur_exp.rest
-    return res
-    # END PROBLEM 6
+    if (expressions == nil):
+        return None
+    # 下面这个 if 是 EC Problem 专用的, 普通的 Problem 6 可以不加
+    # 此时 cur_exp 的位置是最后一个用来做返回值, 所以加 True
+    if (expressions.rest == nil):
+        return scheme_eval(expressions.first, env, True)
+
+    scheme_eval(expressions.first, env)
+    return eval_all(expressions.rest, env)
 
 
 ##################

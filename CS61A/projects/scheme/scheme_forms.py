@@ -106,11 +106,11 @@ def do_if_form(expressions, env):
     3
     """
     validate_form(expressions, 2, 3)
+    # 这两个都作返回值, 都加 True (EC Problem)
     if is_scheme_true(scheme_eval(expressions.first, env)):
-        return scheme_eval(expressions.rest.first, env)
+        return scheme_eval(expressions.rest.first, env, True)
     elif len(expressions) == 3:
-        return scheme_eval(expressions.rest.rest.first, env)
-
+        return scheme_eval(expressions.rest.rest.first, env, True)
 
 def do_and_form(expressions, env):
     """Evaluate a (short-circuited) and form.
@@ -127,16 +127,16 @@ def do_and_form(expressions, env):
     False
     """
     # BEGIN PROBLEM 12
-    "*** YOUR CODE HERE ***"
-    cur_exp, last = expressions, '#t'
-    while (cur_exp != nil):
-        last = scheme_eval(cur_exp.first, env)
-        if (is_scheme_true(last) == False):
-            return last
-        cur_exp = cur_exp.rest
-    return last
-    # END PROBLEM 12
+    if (expressions == nil):
+        return True
 
+    while expressions.rest is not nil:
+        if is_scheme_false(scheme_eval(expressions.first, env)):
+            return scheme_eval(expressions.first, env, True)
+        else:
+            expressions = expressions.rest
+    return scheme_eval(expressions.first, env, True)
+    # END PROBLEM 12
 
 def do_or_form(expressions, env):
     """Evaluate a (short-circuited) or form.
@@ -153,16 +153,16 @@ def do_or_form(expressions, env):
     6
     """
     # BEGIN PROBLEM 12
-    "*** YOUR CODE HERE ***"
-    cur_exp, last = expressions, '#f'
-    while (cur_exp != nil):
-        last = scheme_eval(cur_exp.first, env)
-        if (is_scheme_true(last) == True):
-            return last
-        cur_exp = cur_exp.rest
-    return last
-    # END PROBLEM 12
+    if (expressions == nil):
+        return False
 
+    while expressions.rest is not nil:
+        if is_scheme_true(scheme_eval(expressions.first, env)):
+            return scheme_eval(expressions.first, env, True)
+        else:
+            expressions = expressions.rest
+    return scheme_eval(expressions.first, env, True)
+    # END PROBLEM 12
 
 def do_cond_form(expressions, env):
     """Evaluate a cond form.
@@ -209,17 +209,15 @@ def make_let_frame(bindings, env):
         raise SchemeError('bad bindings list in let form')
     names = vals = nil
     # BEGIN PROBLEM 14
-    "*** YOUR CODE HERE ***"
-    cur_bindings = bindings
-    while (cur_bindings != nil):
-        x = cur_bindings.first.first
-        y = eval_all(cur_bindings.first.rest, env)
-        validate_form(cur_bindings.first, 2, 2)
-        names = Pair(x, names)
-        vals = Pair(y, vals)
-        cur_bindings = cur_bindings.rest
+    while bindings is not nil:
+        validate_form(bindings, 1)
+        p = bindings.first
+        validate_form(p.rest, 1, 1)
+        names = Pair(p.first, names)
+        vals = Pair(scheme_eval(p.rest.first, env), vals)
+        validate_formals(names)
+        bindings = bindings.rest
     # END PROBLEM 14
-    validate_formals(names)
     return env.make_child_frame(names, vals)
 
 
