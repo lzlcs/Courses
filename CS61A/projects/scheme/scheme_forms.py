@@ -232,6 +232,26 @@ def do_define_macro(expressions, env):
     """
     # BEGIN PROBLEM OPTIONAL_1
     "*** YOUR CODE HERE ***"
+    validate_form(expressions, 2) # 检测参数数量
+    signature = expressions.first
+
+    if scheme_symbolp(signature):
+        # 这一段是类似赋值操作
+        validate_form(expressions, 2, 2) # 检测参数数量
+        env.define(signature, scheme_eval(expressions.rest.first, env))
+        return signature
+
+    elif isinstance(signature, Pair) and scheme_symbolp(signature.first):
+        # 这一段是类似函数的操作
+        symbol = expressions.first.first
+        formals = expressions.first.rest
+        body = expressions.rest
+        env.define(symbol, MacroProcedure(formals, body, env))
+        return symbol
+    else:
+        raise SchemeError
+
+
     # END PROBLEM OPTIONAL_1
 
 

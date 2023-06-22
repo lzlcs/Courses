@@ -38,6 +38,10 @@ def scheme_eval(expr, env, _=None):  # Optional third argument is ignored
         # 否则在最后的 test.scm中会有bug: 执行顺序变化
         # 这玩意真难调
         opt = scheme_eval(first, env)
+        # 下两行是 Optional Problem 1 的内容
+        if isinstance(opt, MacroProcedure):
+            return scheme_eval(complete_apply(opt, rest, env), env, True)
+
         end = rest.map(lambda x: scheme_eval(x, env))
         return scheme_apply(opt, end, env)
         # END PROBLEM 3

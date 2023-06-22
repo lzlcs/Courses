@@ -41,12 +41,12 @@
 (define (let-to-lambda expr)
   (cond ((atom? expr)
          ; BEGIN OPTIONAL PROBLEM 2
-         'replace-this-line
+         expr
          ; END OPTIONAL PROBLEM 2
          )
         ((quoted? expr)
          ; BEGIN OPTIONAL PROBLEM 2
-         'replace-this-line
+         expr
          ; END OPTIONAL PROBLEM 2
          )
         ((or (lambda? expr)
@@ -55,23 +55,45 @@
                (params (cadr expr))
                (body   (cddr expr)))
            ; BEGIN OPTIONAL PROBLEM 2
-           'replace-this-line
+           ; (form (let-to-lambda params) (let-to-lambda body))
+           (cons form (cons params  
+                 (let-to-lambda body)))
            ; END OPTIONAL PROBLEM 2
            ))
         ((let? expr)
          (let ((values (cadr expr))
                (body   (cddr expr)))
-           ; BEGIN OPTIONAL PROBLEM 2
-           'replace-this-line
+           ; BEGIN OPTIONAL PROBLEM 2          
+           (let ((name (car (zip values)))
+                 (val (cadr (zip values))))
+                (cons (cons 'lambda 
+                            (cons name 
+                                  (cons (let-to-lambda (car body)) 
+                                        nil
+                                  )
+                            )
+                      ) 
+                      (map let-to-lambda val)
+                )
+           )
            ; END OPTIONAL PROBLEM 2
-           ))
+          ))
         (else
          ; BEGIN OPTIONAL PROBLEM 2
-         'replace-this-line
+         
+         (cons (car expr) (map let-to-lambda (cdr expr)))
          ; END OPTIONAL PROBLEM 2
          )))
 
 ; Some utility functions that you may find useful to implement for let-to-lambda
 
 (define (zip pairs)
-  'replace-this-line)
+    (cond
+        ((null? pairs) '(() ()))
+        ((null? (cdr pairs)) (map (lambda (x) (cons x nil)) (car pairs)))
+        ((null? (cdar pairs)) (cons (map car pairs) nil))
+        (else (cons (map car pairs) (zip (map cdr pairs))))
+    )
+ )
+
+
