@@ -20,3 +20,6 @@
     '()
     (cons (car lst) 
           (no-repeats(my-filter (lambda (x) (not (= x (car lst)))) (cdr lst))))))
+
+((((((((()))))))))
+(((((((())))))))
