@@ -142,6 +142,7 @@ NOTES:
  *   Max ops: 14
  *   Rating: 1
  */
+
 int bitXor(int x, int y) {
     return ~(~(~x & y) & ~(~y & x));
 }
