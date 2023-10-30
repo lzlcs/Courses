@@ -1,9 +1,13 @@
 # Courses
-Archive my labs, hws and projects during my studies.
+Archive my labs, hws and projects.
 
 # Lists
 
-* CS61A (Fall2022) [blog](https://lzlcs.github.io/2023/05/08/CS61A/) [Websites](https://inst.eecs.berkeley.edu/~cs61a/fa22/)
+* CS61A (Fall2022)
 * CSAPP 
-* Pintos
-* MIT 6.5840 (Distributed System)
+* Pintos (PKUOS)
+* MIT 6.5840 (Distributed System) (Spring2023)
+
+# Blog
+
+[lzlcs's Blog](https://lzlcs.github.io/)
