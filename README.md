@@ -4,3 +4,6 @@ Archive my labs, hws and projects during my studies.
 # Lists
 
 * CS61A (Fall2022) [blog](https://lzlcs.github.io/2023/05/08/CS61A/) [Websites](https://inst.eecs.berkeley.edu/~cs61a/fa22/)
+* CSAPP 
+* Pintos
+* MIT 6.5840 (Distributed System)
