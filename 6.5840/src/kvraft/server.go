@@ -1,15 +1,18 @@
 package kvraft
 
 import (
-	"6.5840/labgob"
-	"6.5840/labrpc"
-	"6.5840/raft"
+	"bytes"
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"6.5840/labgob"
+	"6.5840/labrpc"
+	"6.5840/raft"
 )
 
-const Debug = false
+const Debug = true
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
 	if Debug {
@@ -18,11 +21,12 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 	return
 }
 
-
 type Op struct {
-	// Your definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
+	Name     string
+	ClientId int64
+	SeqId    int
+	Key      string
+	Value    string
 }
 
 type KVServer struct {
@@ -34,16 +38,71 @@ type KVServer struct {
 
 	maxraftstate int // snapshot if log grows this big
 
-	// Your definitions here.
+	lastApplied int
+	chans       map[int]chan Op
+	client2seq  map[int64]int
+	keyvalue    map[string]string
 }
 
-
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
-	// Your code here.
+
+	oldOp := Op{"GET", args.ClientId, args.SeqId, args.Key, ""}
+	index, _, isLeader := kv.rf.Start(oldOp)
+
+	if !isLeader || kv.killed() {
+		return
+	}
+
+	// fmt.Println("SERVER GET: ", args.Key)
+	ch := kv.getCh(index)
+
+	select {
+	case newOp := <-ch:
+		if newOp.ClientId != oldOp.ClientId || newOp.SeqId != oldOp.SeqId {
+			reply.Err = ErrWrongLeader
+		} else {
+			reply.Err = OK
+			kv.mu.Lock()
+			reply.Value = kv.keyvalue[args.Key]
+			kv.mu.Unlock()
+		}
+	case <-time.After(100 * time.Millisecond):
+		reply.Err = ErrWrongLeader
+	}
+
+	kv.mu.Lock()
+	delete(kv.chans, index)
+	kv.mu.Unlock()
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
-	// Your code here.
+
+	// time.Sleep(1 * time.Second)
+	oldOp := Op{args.Op, args.ClientId, args.SeqId, args.Key, args.Value}
+	index, _, isLeader := kv.rf.Start(oldOp)
+
+	// fmt.Println("SERVER: ", args.Op, args.Key, args.Value, isLeader)
+	if !isLeader || kv.killed() {
+		return
+	}
+
+	// fmt.Println("SERVER: ", args.Op, args.Key, args.Value)
+	ch := kv.getCh(index)
+
+	select {
+	case newOp := <-ch:
+		if newOp.ClientId != oldOp.ClientId || newOp.SeqId != oldOp.SeqId {
+			reply.Err = ErrWrongLeader
+		} else {
+			reply.Err = OK
+		}
+	case <-time.After(100 * time.Millisecond):
+		reply.Err = ErrWrongLeader
+	}
+
+	kv.mu.Lock()
+	delete(kv.chans, index)
+	kv.mu.Unlock()
 }
 
 // the tester calls Kill() when a KVServer instance won't
@@ -86,12 +145,107 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.me = me
 	kv.maxraftstate = maxraftstate
 
-	// You may need initialization code here.
+	kv.chans = make(map[int]chan Op)
+	kv.client2seq = make(map[int64]int)
+	kv.keyvalue = make(map[string]string)
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 
-	// You may need initialization code here.
+	snapshot := persister.ReadSnapshot()
+	kv.decodeSnapshot(snapshot)
+
+	go kv.getLog()
 
 	return kv
+}
+
+func (kv *KVServer) decodeSnapshot(snapshot []byte) {
+	if snapshot == nil || len(snapshot) < 1 {
+		return
+	}
+	r := bytes.NewBuffer(snapshot)
+	d := labgob.NewDecoder(r)
+	var keyvalue map[string]string
+	//var Index2Cmd map[int] chan Op
+	var client2seq map[int64]int
+
+	if d.Decode(&keyvalue) != nil ||
+		d.Decode(&client2seq) != nil {
+	} else {
+		kv.keyvalue = keyvalue
+		kv.client2seq = client2seq
+	}
+
+}
+
+func (kv *KVServer) makeSnapshot() []byte {
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(kv.keyvalue)
+	e.Encode(kv.client2seq)
+	snapshot := w.Bytes()
+	return snapshot
+}
+
+func (kv *KVServer) getLog() {
+	for !kv.killed() {
+		entry := <-kv.applyCh
+		// fmt.Println("APPLYCH: ", entry.CommandIndex)
+
+		if entry.CommandValid {
+
+			op := entry.Command.(Op)
+			if !kv.exist(op.ClientId, op.SeqId) {
+				kv.mu.Lock()
+				if op.Name == "Put" {
+					kv.keyvalue[op.Key] = op.Value
+				} else if op.Name == "Append" {
+					kv.keyvalue[op.Key] += op.Value
+				}
+				kv.client2seq[op.ClientId] = op.SeqId
+				kv.mu.Unlock()
+			}
+
+			if kv.maxraftstate != -1 && kv.rf.Persister.RaftStateSize() > kv.maxraftstate {
+				kv.rf.Snapshot(entry.CommandIndex, kv.makeSnapshot())
+			}
+
+			kv.getCh(entry.CommandIndex) <- op
+		} else if entry.SnapshotValid {
+			kv.mu.Lock()
+			if entry.SnapshotIndex > kv.lastApplied {
+				kv.decodeSnapshot(entry.Snapshot)
+				kv.lastApplied = entry.SnapshotIndex
+			}
+			kv.mu.Unlock()
+		}
+	}
+}
+
+func (kv *KVServer) getCh(index int) chan Op {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+
+	ch, ok := kv.chans[index]
+
+	if !ok {
+		kv.chans[index] = make(chan Op, 1)
+		ch = kv.chans[index]
+	}
+
+	return ch
+}
+
+func (kv *KVServer) exist(clientId int64, seqId int) bool {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+
+	id, ok := kv.client2seq[clientId]
+
+	if !ok {
+		return false
+	}
+
+	return seqId <= id
 }

@@ -41,7 +41,7 @@ type LogEntry struct {
 type Raft struct {
 	mu        sync.Mutex          // Lock to protect shared access to this peer's state
 	peers     []*labrpc.ClientEnd // RPC end points of all peers
-	persister *Persister          // Object to hold this peer's persisted state
+	Persister *Persister          // Object to hold this peer's persisted state
 	me        int                 // this peer's index into peers[]
 	dead      int32               // set by Kill()
 
@@ -80,7 +80,7 @@ func (rf *Raft) encodeState() []byte {
 }
 
 func (rf *Raft) persist() {
-	rf.persister.Save(rf.encodeState(), rf.persister.ReadSnapshot())
+	rf.Persister.Save(rf.encodeState(), rf.Persister.ReadSnapshot())
 }
 
 func (rf *Raft) readPersist(data []byte) {
@@ -121,7 +121,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	copy(rf.snapshot, snapshot)
 	rf.log[0].Command = nil
 
-	rf.persister.Save(rf.encodeState(), snapshot)
+	rf.Persister.Save(rf.encodeState(), snapshot)
 }
 
 type InstallSnapshotArgs struct {
@@ -171,7 +171,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	}
 	rf.snapshot = make([]byte, len(args.Snapshot))
 	copy(rf.snapshot, args.Snapshot)
-	rf.persister.Save(rf.encodeState(), args.Snapshot)
+	rf.Persister.Save(rf.encodeState(), args.Snapshot)
 	rf.lastApplied, rf.commitIndex = 0, args.LastIncludedIndex
 }
 
@@ -386,7 +386,7 @@ func (rf *Raft) BroadCast() {
 					LeaderId:          rf.me,
 					LastIncludedIndex: rf.log[0].Index,
 					LastIncludedTerm:  rf.log[0].Term,
-					Snapshot:          rf.persister.ReadSnapshot(),
+					Snapshot:          rf.Persister.ReadSnapshot(),
 				}
 				rf.mu.Unlock()
 
@@ -641,7 +641,7 @@ func (rf *Raft) applyMsg() {
 }
 
 func Make(peers []*labrpc.ClientEnd, me int,
-	persister *Persister, applyCh chan ApplyMsg) *Raft {
+	Persister *Persister, applyCh chan ApplyMsg) *Raft {
 	// Your initialization code here (2A, 2B, 2C).
 
 	// initialize from state persisted before a crash
@@ -649,7 +649,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf := &Raft{
 
 		peers:     peers,
-		persister: persister,
+		Persister: Persister,
 		me:        me,
 
 		state:   FOLLOWER,
@@ -664,7 +664,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.setElectionTime()
 
 	// 初始化之前持久化过的量
-	rf.readPersist(persister.ReadRaftState())
+	rf.readPersist(Persister.ReadRaftState())
 
 	//
 	rf.commitIndex = rf.log[0].Index
