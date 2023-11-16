@@ -196,7 +196,7 @@ func (kv *KVServer) getLog() {
 		if entry.CommandValid {
 
 			op := entry.Command.(Op)
-			if !kv.exist(op.ClientId, op.SeqId) {
+			if kv.exist(op.ClientId, op.SeqId) {
 				kv.mu.Lock()
 				if op.Name == "Put" {
 					kv.keyvalue[op.Key] = op.Value
@@ -244,8 +244,8 @@ func (kv *KVServer) exist(clientId int64, seqId int) bool {
 	id, ok := kv.client2seq[clientId]
 
 	if !ok {
-		return false
+		return true
 	}
 
-	return seqId <= id
+	return seqId > id
 }
