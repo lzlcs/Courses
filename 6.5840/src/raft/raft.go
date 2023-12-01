@@ -45,10 +45,9 @@ type Raft struct {
 	me        int                 // this peer's index into peers[]
 	dead      int32               // set by Kill()
 
-	applyCh  chan ApplyMsg // 应用日志的 channel
-	state    int           // 记录当前状态
-	timeout  time.Time     // 选举计时器
-	snapshot []byte        // 记录快照
+	applyCh chan ApplyMsg // 应用日志的 channel
+	state   int           // 记录当前状态
+	timeout time.Time     // 选举计时器
 
 	currentTerm int
 	votedFor    int
@@ -117,8 +116,8 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 	var tmp []LogEntry
 	rf.log = append(tmp, rf.log[index-firstIndex:]...)
-	rf.snapshot = make([]byte, len(snapshot))
-	copy(rf.snapshot, snapshot)
+	// rf.snapshot = make([]byte, len(snapshot))
+	// copy(rf.snapshot, snapshot)
 	rf.log[0].Command = nil
 
 	rf.Persister.Save(rf.encodeState(), snapshot)
@@ -169,8 +168,8 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		Index:   args.LastIncludedIndex,
 		Command: nil,
 	}
-	rf.snapshot = make([]byte, len(args.Snapshot))
-	copy(rf.snapshot, args.Snapshot)
+	// rf.snapshot = make([]byte, len(args.Snapshot))
+	// copy(rf.snapshot, args.Snapshot)
 	rf.Persister.Save(rf.encodeState(), args.Snapshot)
 	rf.lastApplied, rf.commitIndex = 0, args.LastIncludedIndex
 }
@@ -204,7 +203,11 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	if args.Term > rf.currentTerm {
 		reply.Term = args.Term
-		rf.state = FOLLOWER
+
+		if rf.state != FOLLOWER {
+			rf.state = FOLLOWER
+			rf.setElectionTime()
+		}
 		rf.votedFor = -1
 	}
 
@@ -564,7 +567,7 @@ func (rf *Raft) ElectClock() {
 		}
 		rf.mu.Unlock()
 
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -592,7 +595,7 @@ func (rf *Raft) setElectionTime() {
 func (rf *Raft) applyMsg() {
 
 	for !rf.killed() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 
 		rf.mu.Lock()
 
@@ -600,7 +603,7 @@ func (rf *Raft) applyMsg() {
 			tmp := ApplyMsg{
 
 				SnapshotValid: true,
-				Snapshot:      rf.snapshot,
+				Snapshot:      rf.Persister.snapshot,
 				SnapshotTerm:  rf.log[0].Term,
 				SnapshotIndex: rf.log[0].Index,
 			}
@@ -621,7 +624,8 @@ func (rf *Raft) applyMsg() {
 		applyEntries := make([]LogEntry, commitIndex-rf.lastApplied)
 
 		firstIndex := rf.log[0].Index
-		copy(applyEntries, rf.log[rf.lastApplied+1-firstIndex:commitIndex+1-firstIndex])
+		l, r := max(rf.lastApplied+1-firstIndex, 0), max(commitIndex+1-firstIndex, 0)
+		copy(applyEntries, rf.log[l:r])
 
 		rf.mu.Unlock()
 

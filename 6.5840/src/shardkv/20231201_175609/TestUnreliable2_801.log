@@ -1,0 +1,9 @@
+Test: unreliable 2...
+--- FAIL: TestUnreliable2 (7.64s)
+    test_test.go:22: Get(0): expected:
+        Szag87DQRIqCXlM39MgP
+        received:
+        Szag87DQRIqCXlM39MgP39MgP
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	7.772s

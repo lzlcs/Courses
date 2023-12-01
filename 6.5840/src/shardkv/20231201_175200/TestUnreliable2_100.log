@@ -1,0 +1,10 @@
+Test: unreliable 2...
+panic: runtime error: slice bounds out of range [-1:]
+
+goroutine 37 [running]:
+6.5840/raft.(*Raft).applyMsg(0xc0001155f0)
+	/home/lozical/courses/6.5840/src/raft/raft.go:627 +0x456
+created by 6.5840/raft.Make
+	/home/lozical/courses/6.5840/src/raft/raft.go:678 +0x256
+exit status 2
+FAIL	6.5840/shardkv	2.392s

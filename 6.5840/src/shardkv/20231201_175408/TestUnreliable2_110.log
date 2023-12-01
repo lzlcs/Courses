@@ -1,0 +1,9 @@
+Test: unreliable 2...
+--- FAIL: TestUnreliable2 (9.92s)
+    test_test.go:22: Get(0): expected:
+        YJT9fQy497eDcTV7eeDBiZrL8ccxNYDETLG
+        received:
+        YJT9fQy497eDcTV7eeDBiZrL8ccxNYDETLGDETLG
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	9.934s

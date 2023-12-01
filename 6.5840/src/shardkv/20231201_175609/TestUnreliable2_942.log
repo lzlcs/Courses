@@ -1,0 +1,9 @@
+Test: unreliable 2...
+--- FAIL: TestUnreliable2 (21.78s)
+    test_test.go:22: Get(0): expected:
+        RPM5oGKTVqhnftNm-iavMEu5F2uD00zn-Zh
+        received:
+        RPM5oGKTVqhnftNm-iavMEu5F2uD00zn-Zhzn-Zh
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	21.919s

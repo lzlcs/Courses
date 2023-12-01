@@ -1,0 +1,9 @@
+Test: unreliable 2...
+--- FAIL: TestUnreliable2 (9.50s)
+    test_test.go:22: Get(0): expected:
+        mSnCSIkmtlOAJc_e5qVcGvU1DVRKEqMWD9Qhzkd_B7JjoZGUBVg_spisCf80lNpziatnmYb7sLQhW8BOmYzbJua8_ztMRUab0WP_
+        received:
+        mSnCSIkmtlOAJc_e5qVcGvU1DVRKEqMWD9Qhzkd_B7JjoZGUBVg_spisCf80lNpziatnmYb7sLQb7sLQhW8BOmYzbJua8_ztMRUab0WP_
+FAIL
+exit status 1
+FAIL	6.5840/shardkv	9.608s

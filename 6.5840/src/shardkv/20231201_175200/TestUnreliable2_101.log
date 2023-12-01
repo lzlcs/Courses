@@ -1,0 +1,10 @@
+Test: unreliable 2...
+panic: interface conversion: interface {} is nil, not shardkv.Op
+
+goroutine 63 [running]:
+6.5840/shardkv.(*ShardKV).apply(0xc00018ec00)
+	/home/lozical/courses/6.5840/src/shardkv/server.go:299 +0x1df6
+created by 6.5840/shardkv.StartServer
+	/home/lozical/courses/6.5840/src/shardkv/server.go:885 +0x545
+exit status 2
+FAIL	6.5840/shardkv	3.475s

@@ -176,7 +176,6 @@ func (kv *KVServer) decodeSnapshot(snapshot []byte) {
 		kv.keyvalue = keyvalue
 		kv.client2seq = client2seq
 	}
-
 }
 
 func (kv *KVServer) makeSnapshot() []byte {
