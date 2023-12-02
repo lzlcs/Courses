@@ -67,13 +67,14 @@ type ShardKV struct {
 	Client2Seq  map[int64]int
 	chans       map[int]chan KVOp
 
-	mck          *shardctrler.Clerk
+	mck *shardctrler.Clerk
+	// 新老配置, 用于比较是否迁移完了
 	oldConfig    shardctrler.Config
 	newConfig    shardctrler.Config
-	ShardState   map[int]string
-	ShardNum     map[int]int
-	OutedData    map[int]map[int]map[string]string //num->shard id->data
-	Shard2Client map[int][]int64
+	ShardState   map[int]string                    // 记录 shard 的状态, 未被迁移还是正在被迁移
+	ShardNum     map[int]int                       // 记录 shard 的版本号
+	OutedData    map[int]map[int]map[string]string // num->shardId->data
+	Shard2Client map[int][]int64                   // 记录 shard
 
 	Pullchan map[int]chan PullReply
 	K2V      [shardctrler.NShards]map[string]string
@@ -182,6 +183,7 @@ func (kv *ShardKV) apply() {
 				case MigrateShard:
 					{
 
+						// 如果对应 shard 的版本号小于当前的版本号 并且这个 shard 的状态是待迁移的
 						if kv.ShardNum[op.ShardId] < op.Num && kv.ShardState[op.ShardId] != OK {
 							kv.Migrate(op.ShardId, op.DB)
 							delete(kv.Shard2Client, op.ShardId)
@@ -217,14 +219,17 @@ func (kv *ShardKV) apply() {
 
 				case Configuration:
 					{
-
+						// 只有版本号正好差一的时候才能迁移
 						if kv.newConfig.Num+1 == op.Config.Num {
 							kv.oldConfig = kv.newConfig
 							kv.newConfig = op.Config
 							for shardid, gid := range kv.newConfig.Shards {
+								// 如果这个分片要被迁移走
 								if gid != kv.gid && kv.oldConfig.Shards[shardid] == kv.gid {
+									// 当这个 shard 没有被迁移
 									if kv.ShardState[shardid] == OK {
 										CloneMap := kv.Copy(shardid)
+										// 这段是迁移 outeddata
 										if len(CloneMap) == 0 {
 											delete(kv.OutedData[op.Config.Num-1], shardid)
 										} else {
@@ -240,9 +245,11 @@ func (kv *ShardKV) apply() {
 										}
 
 										kv.Remove(shardid)
+										// 变为迁移态, 更新版本号
 										kv.ShardState[shardid] = Not
 										kv.ShardNum[shardid] = op.Config.Num
 									}
+									// 不用被迁移走的情况就只需要更新一下版本号即可
 								} else if gid == kv.gid && kv.oldConfig.Shards[shardid] == kv.gid {
 									kv.ShardNum[shardid] = op.Config.Num
 								}

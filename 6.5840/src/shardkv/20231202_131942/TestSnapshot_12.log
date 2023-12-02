@@ -1,4 +1,0 @@
-Test: snapshots, join, and leave ...
-2023/12/02 13:19:44 labrpc.Service.dispatch(): unknown method Get in ShardKV.Get; expecting one of [Command PullShard PutAppend SendClearShard ClearShard]
-exit status 1
-FAIL	6.5840/shardkv	1.030s
