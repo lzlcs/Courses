@@ -1,9 +1,0 @@
-Test: unreliable 2...
---- FAIL: TestUnreliable2 (8.54s)
-    test_test.go:22: Get(0): expected:
-        c3GeYHLCvazoAsFyhKfciOyy-xHsZSqZ-6uFdqKuL--NMwkPfz4kSn7
-        received:
-        c3GeYHLCvazoAsFyhKfciOyy-xHsZSqZ-6uFdqKuL--NMwkPfz4kSn74kSn7
-FAIL
-exit status 1
-FAIL	6.5840/shardkv	8.704s

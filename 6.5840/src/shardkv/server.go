@@ -13,25 +13,7 @@ import (
 	"6.5840/shardctrler"
 )
 
-// type Op struct {
-// 	// Your definitions here.
-// 	// Field names must start with capital letters,
-// 	// otherwise RPC will break.
-// 	Key     string
-// 	Value   string
-// 	Command int
-
-// 	Seq      int
-// 	ClientId int64
-
-// 	DB         map[string]string
-// 	Client2Seq map[int64]int
-// 	Servers    []string
-// 	ShardId    int
-// 	ShardValid bool
-// 	Num        int
-// 	Config     shardctrler.Config
-// }
+// python dstest.py TestStaticShards TestJoinLeave TestSnapshot TestMissChange TestConcurrent1 TestConcurrent2 TestConcurrent3 TestUnreliable1 TestUnreliable2 TestUnreliable3 TestChallenge1Delete TestChallenge2Unaffected TestChallenge2Partial -p 30 -n 500
 
 type Op struct {
 	ShardValid bool
@@ -39,9 +21,6 @@ type Op struct {
 }
 
 type KVOp struct {
-	// Your definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
 	Key      string
 	Value    string
 	Command  int
@@ -59,28 +38,11 @@ type ShardOp struct {
 	Config     shardctrler.Config
 }
 
-type outedData struct {
-	DB      KV
-	ShardId int
-}
-
-type PullArgs struct {
-	Num     int
-	ShardId int
-}
-
 const (
-	Not  = "Not"
-	Pull = "Pull"
-	// MigrateShard = "Migrate"
-	// RemoveShard  = "Remove"
-
-	// Finish        = "Finish"
-	// Configuration = "Conf"
-	// Clearshard    = "Clear"
-	MigrateShard = 1
-	RemoveShard  = 2
-
+	Not           = "Not"
+	Pull          = "Pull"
+	MigrateShard  = 1
+	RemoveShard   = 2
 	Finish        = 3
 	Configuration = 4
 	Clearshard    = 5
@@ -89,12 +51,6 @@ const (
 	GET           = 8
 	PULL          = 9
 )
-
-type PullReply struct {
-	Err        Err
-	DB         map[string]string
-	Client2Seq map[int64]int
-}
 
 type ShardKV struct {
 	mu           sync.Mutex
@@ -110,27 +66,17 @@ type ShardKV struct {
 	LastApplied  int
 	StateMachine KVStateMachine
 	Client2Seq   map[int64]int
-	Index2Cmd    map[int]chan KVOp
+	chans        map[int]chan KVOp
 
-	sm           *shardctrler.Clerk
-	LastConfig   shardctrler.Config
-	PreConfig    shardctrler.Config
+	mck          *shardctrler.Clerk
+	oldConfig    shardctrler.Config
+	newConfig    shardctrler.Config
 	ShardState   map[int]string
 	ShardNum     map[int]int
 	OutedData    map[int]map[int]map[string]string //num->shard id->data
 	Shard2Client map[int][]int64
 
 	Pullchan map[int]chan PullReply
-}
-
-func (kv *ShardKV) GetChan(index int) chan KVOp {
-
-	ch, exist := kv.Index2Cmd[index]
-	if !exist {
-		ch = make(chan KVOp, 1)
-		kv.Index2Cmd[index] = ch
-	}
-	return ch
 }
 
 type KVStateMachine interface {
@@ -143,21 +89,14 @@ type KVStateMachine interface {
 }
 
 type KV struct {
-	K2V map[int]map[string]string
+	K2V [shardctrler.NShards]map[string]string
 }
 
 func (kv *KV) Get(key string) (string, Err) {
-	value, ok := kv.K2V[key2shard(key)][key]
-	if ok {
-		return value, OK
-	}
-	return "", ErrNoKey
+	return kv.K2V[key2shard(key)][key], OK
 }
 
 func (kv *KV) Put(key string, value string) Err {
-	if len(kv.K2V[key2shard(key)]) == 0 {
-		kv.K2V[key2shard(key)] = make(map[string]string)
-	}
 	kv.K2V[key2shard(key)][key] = value
 	return OK
 }
@@ -168,7 +107,6 @@ func (kv *KV) Append(key string, value string) Err {
 }
 
 func (kv *KV) Migrate(shardId int, shard map[string]string) Err {
-	delete(kv.K2V, shardId)
 	kv.K2V[shardId] = make(map[string]string)
 	for k, v := range shard {
 		kv.K2V[shardId][k] = v
@@ -185,7 +123,7 @@ func (kv *KV) Copy(shardId int) map[string]string {
 }
 
 func (kv *KV) Remove(shardId int) Err {
-	delete(kv.K2V, shardId)
+	kv.K2V[shardId] = make(map[string]string)
 	return OK
 }
 
@@ -209,32 +147,20 @@ func (kv *ShardKV) PutAppend(args *CommandArgs, reply *CommandReply) {
 }
 
 func (kv *ShardKV) CheckGroup(key string) bool {
-	return kv.PreConfig.Shards[key2shard(key)] == kv.gid
+	return kv.newConfig.Shards[key2shard(key)] == kv.gid
 }
 
 func (kv *ShardKV) Command(args *CommandArgs, reply *CommandReply) {
-	if kv.killed() {
-		reply.Err = ErrWrongLeader
-		return
-	}
-	if _, isLeader := kv.rf.GetState(); !isLeader {
-		reply.Err = ErrWrongLeader
-		return
-	}
+
 	kv.mu.Lock()
 
-	if !kv.CheckGroup(args.Key) || kv.ShardState[key2shard(args.Key)] != OK {
+	shardId := key2shard(args.Key)
+	if kv.newConfig.Shards[shardId] != kv.gid || kv.ShardState[shardId] != OK {
 		reply.Err = ErrWrongGroup
-
 		kv.mu.Unlock()
 		return
 	}
 
-	if args.Op != "Get" && kv.Client2Seq[args.ClientId] >= args.Seq {
-		reply.Err = OK
-		kv.mu.Unlock()
-		return
-	}
 	intcmd := 0
 	switch args.Op {
 	case Put:
@@ -261,23 +187,13 @@ func (kv *ShardKV) Command(args *CommandArgs, reply *CommandReply) {
 	kv.mu.Unlock()
 	select {
 	case app := <-ch:
-		if app.ClientId == op.ClientId && app.Seq == op.Seq {
-			if args.Op == "Get" {
-
-				reply.Value = app.Value
-				if reply.Value != "" {
-					reply.Err = OK
-				} else {
-					reply.Err = ErrNoKey
-				}
-
-			} else {
-				reply.Err = OK
-
-			}
-
-		} else {
+		if app.ClientId != op.ClientId || app.Seq != op.Seq {
 			reply.Err = ErrWrongLeader
+		} else {
+			reply.Err = OK
+			if args.Op == "Get" {
+				reply.Value = app.Value
+			}
 		}
 	case <-time.After(time.Millisecond * 200):
 		reply.Err = ErrWrongLeader
@@ -285,7 +201,7 @@ func (kv *ShardKV) Command(args *CommandArgs, reply *CommandReply) {
 
 	go func() {
 		kv.mu.Lock()
-		delete(kv.Index2Cmd, index)
+		delete(kv.chans, index)
 		kv.mu.Unlock()
 	}()
 }
@@ -341,11 +257,11 @@ func (kv *ShardKV) apply() {
 				case Configuration:
 					{
 
-						if kv.PreConfig.Num+1 == op.Config.Num {
-							kv.LastConfig = kv.PreConfig
-							kv.PreConfig = op.Config
-							for shardid, gid := range kv.PreConfig.Shards {
-								if gid != kv.gid && kv.LastConfig.Shards[shardid] == kv.gid {
+						if kv.newConfig.Num+1 == op.Config.Num {
+							kv.oldConfig = kv.newConfig
+							kv.newConfig = op.Config
+							for shardid, gid := range kv.newConfig.Shards {
+								if gid != kv.gid && kv.oldConfig.Shards[shardid] == kv.gid {
 									if kv.ShardState[shardid] == OK {
 										CloneMap := kv.StateMachine.Copy(shardid)
 										if len(CloneMap) == 0 {
@@ -366,7 +282,7 @@ func (kv *ShardKV) apply() {
 										kv.ShardState[shardid] = Not
 										kv.ShardNum[shardid] = op.Config.Num
 									}
-								} else if gid == kv.gid && kv.LastConfig.Shards[shardid] == kv.gid {
+								} else if gid == kv.gid && kv.oldConfig.Shards[shardid] == kv.gid {
 									kv.ShardNum[shardid] = op.Config.Num
 								}
 							}
@@ -502,7 +418,6 @@ func (kv *ShardKV) apply() {
 			if ch.SnapshotIndex > kv.LastApplied {
 
 				kv.DecodeSnapShot(ch.Snapshot)
-
 				kv.LastApplied = ch.SnapshotIndex
 			}
 			kv.mu.Unlock()
@@ -535,7 +450,7 @@ func (kv *ShardKV) PullShard(args *PullArgs, reply *PullReply) {
 		return
 	}
 
-	if args.Num > kv.PreConfig.Num {
+	if args.Num > kv.newConfig.Num {
 		reply.Err = Not
 		kv.mu.Unlock()
 		return
@@ -679,17 +594,17 @@ func (kv *ShardKV) UpdateConfig() {
 			continue
 		}
 		kv.mu.Lock()
-		if kv.PreConfig.Num != kv.LastConfig.Num {
+		if kv.newConfig.Num != kv.oldConfig.Num {
 			canConfig := true
-			for shardid, gid := range kv.PreConfig.Shards {
-				if gid == kv.gid && kv.LastConfig.Shards[shardid] != kv.gid && kv.ShardNum[shardid] != kv.PreConfig.Num {
-					args := PullArgs{Num: kv.PreConfig.Num - 1, ShardId: shardid}
-					oldgid := kv.LastConfig.Shards[shardid]
+			for shardid, gid := range kv.newConfig.Shards {
+				if gid == kv.gid && kv.oldConfig.Shards[shardid] != kv.gid && kv.ShardNum[shardid] != kv.newConfig.Num {
+					args := PullArgs{Num: kv.newConfig.Num - 1, ShardId: shardid}
+					oldgid := kv.oldConfig.Shards[shardid]
 					canConfig = false
 					if oldgid == 0 {
 						op := ShardOp{
 							Command: MigrateShard,
-							Num:     kv.PreConfig.Num,
+							Num:     kv.newConfig.Num,
 							DB:      make(map[string]string),
 							ShardId: shardid,
 						}
@@ -698,34 +613,34 @@ func (kv *ShardKV) UpdateConfig() {
 						continue
 					}
 					Group := make(map[int][]string)
-					for k, v := range kv.LastConfig.Groups {
+					for k, v := range kv.oldConfig.Groups {
 						Group[k] = v
 					}
 					go kv.SendPullShard(Group, &args, oldgid)
 				}
 			}
 			if canConfig {
-				kv.LastConfig = kv.PreConfig
+				kv.oldConfig = kv.newConfig
 			}
 			kv.mu.Unlock()
 			time.Sleep(time.Millisecond * 33)
 			continue
 		}
-		nextnum := kv.PreConfig.Num + 1
+		nextnum := kv.newConfig.Num + 1
 		kv.mu.Unlock()
-		newConfig := kv.sm.Query(nextnum)
+		newConfig := kv.mck.Query(nextnum)
 		kv.mu.Lock()
 		if newConfig.Num == nextnum {
 			//kv.rf.Start(Op{Command: Configuration, Config: newConfig, ShardValid: true})
 			kv.rf.Start(Op{Cmd: ShardOp{Command: Configuration, Config: newConfig}, ShardValid: true})
 			for shardid, gid := range newConfig.Shards {
 				//lack
-				if gid == kv.gid && kv.PreConfig.Shards[shardid] != kv.gid {
-					oldgid := kv.PreConfig.Shards[shardid]
+				if gid == kv.gid && kv.newConfig.Shards[shardid] != kv.gid {
+					oldgid := kv.newConfig.Shards[shardid]
 					if oldgid == 0 {
 						op := ShardOp{
 							Command: MigrateShard,
-							Num:     kv.PreConfig.Num + 1,
+							Num:     kv.newConfig.Num + 1,
 							DB:      make(map[string]string),
 							ShardId: shardid,
 						}
@@ -735,7 +650,7 @@ func (kv *ShardKV) UpdateConfig() {
 					}
 					args := PullArgs{Num: nextnum - 1, ShardId: shardid}
 					Group := make(map[int][]string)
-					for k, v := range kv.PreConfig.Groups {
+					for k, v := range kv.newConfig.Groups {
 						Group[k] = v
 					}
 					go kv.SendPullShard(Group, &args, oldgid)
@@ -794,8 +709,8 @@ func (kv *ShardKV) DecodeSnapShot(snapshot []byte) {
 		kv.StateMachine = &db
 
 		kv.Client2Seq = Client2Seq
-		kv.PreConfig = preconfig
-		kv.LastConfig = lastconfig
+		kv.newConfig = preconfig
+		kv.oldConfig = lastconfig
 		kv.ShardState = ShardState
 		kv.ShardNum = ShardNum
 		kv.OutedData = OutedData
@@ -811,8 +726,8 @@ func (kv *ShardKV) PersistSnapShot() []byte {
 	e := labgob.NewEncoder(w)
 	e.Encode(kv.StateMachine)
 	e.Encode(kv.Client2Seq)
-	e.Encode(kv.PreConfig)
-	e.Encode(kv.LastConfig)
+	e.Encode(kv.newConfig)
+	e.Encode(kv.oldConfig)
 	e.Encode(kv.ShardState)
 	e.Encode(kv.ShardNum)
 	e.Encode(kv.OutedData)
@@ -860,32 +775,40 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.ctrlers = ctrlers
 
 	// Your initialization code here.
-	kv.sm = shardctrler.MakeClerk(ctrlers)
+	kv.mck = shardctrler.MakeClerk(ctrlers)
 	// Use something like this to talk to the shardctrler:
 	// kv.mck = shardctrler.MakeClerk(kv.ctrlers)
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.Client2Seq = make(map[int64]int)
-	kv.Index2Cmd = make(map[int]chan KVOp)
+	kv.chans = make(map[int]chan KVOp)
 
-	kv.StateMachine = &KV{make(map[int]map[string]string)}
+	kv.StateMachine = &KV{[shardctrler.NShards]map[string]string{}}
 	kv.OutedData = make(map[int]map[int]map[string]string)
-	kv.LastConfig = shardctrler.Config{Num: 0, Groups: map[int][]string{}}
-	kv.PreConfig = shardctrler.Config{Num: 0, Groups: map[int][]string{}}
+	kv.oldConfig = shardctrler.Config{Num: 0, Groups: map[int][]string{}}
+	kv.newConfig = shardctrler.Config{Num: 0, Groups: map[int][]string{}}
 	kv.ShardState = make(map[int]string)
 	kv.ShardNum = make(map[int]int)
 	kv.Shard2Client = make(map[int][]int64)
 	kv.Pullchan = make(map[int]chan PullReply)
 	snapshot := persister.ReadSnapshot()
 
-	if len(snapshot) > 0 {
-		kv.DecodeSnapShot(snapshot)
-	}
+	kv.DecodeSnapShot(snapshot)
 
 	go kv.apply()
 	go kv.UpdateConfig()
 	gob.Register(ShardOp{})
 	gob.Register(KVOp{})
 	return kv
+}
+
+func (kv *ShardKV) GetChan(index int) chan KVOp {
+
+	ch, exist := kv.chans[index]
+	if !exist {
+		ch = make(chan KVOp, 1)
+		kv.chans[index] = ch
+	}
+	return ch
 }

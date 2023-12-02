@@ -1,9 +1,0 @@
-Test: unreliable 2...
---- FAIL: TestUnreliable2 (10.47s)
-    test_test.go:22: Get(0): expected:
-        nvT4pqe2T8lHS_pUFny3y8e3aiixbFfOl3V7S1kFbNS6Pn2g7g
-        received:
-        nvT4pqe2T8lHS_pUFny3y8e3aiixbFfOl3V7S1kFbNS6PbNS6Pn2g7g
-FAIL
-exit status 1
-FAIL	6.5840/shardkv	10.581s

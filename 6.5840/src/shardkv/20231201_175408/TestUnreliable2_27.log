@@ -1,9 +1,0 @@
-Test: unreliable 2...
---- FAIL: TestUnreliable2 (7.81s)
-    test_test.go:22: Get(0): expected:
-        YK_AozdreETthjm6qsBAwDkT6
-        received:
-        YK_AozdreETthjm6qsBAwDkT6wDkT6
-FAIL
-exit status 1
-FAIL	6.5840/shardkv	7.949s

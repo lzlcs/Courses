@@ -61,3 +61,14 @@ type CommandReply struct {
 	Err   Err
 	Value string
 }
+
+type PullArgs struct {
+	Num     int
+	ShardId int
+}
+
+type PullReply struct {
+	Err        Err
+	DB         map[string]string
+	Client2Seq map[int64]int
+}
