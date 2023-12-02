@@ -63,10 +63,9 @@ type ShardKV struct {
 	maxraftstate int   // snapshot if log grows this big
 	dead         int32 // set by Kill()
 	// Your definitions here.
-	LastApplied  int
-	StateMachine KVStateMachine
-	Client2Seq   map[int64]int
-	chans        map[int]chan KVOp
+	LastApplied int
+	Client2Seq  map[int64]int
+	chans       map[int]chan KVOp
 
 	mck          *shardctrler.Clerk
 	oldConfig    shardctrler.Config
@@ -77,36 +76,10 @@ type ShardKV struct {
 	Shard2Client map[int][]int64
 
 	Pullchan map[int]chan PullReply
+	K2V      [shardctrler.NShards]map[string]string
 }
 
-type KVStateMachine interface {
-	Get(key string) (string, Err)
-	Put(key string, value string) Err
-	Append(key string, value string) Err
-	Migrate(shardId int, shard map[string]string) Err
-	Copy(shardId int) map[string]string
-	Remove(shardId int) Err
-}
-
-type KV struct {
-	K2V [shardctrler.NShards]map[string]string
-}
-
-func (kv *KV) Get(key string) (string, Err) {
-	return kv.K2V[key2shard(key)][key], OK
-}
-
-func (kv *KV) Put(key string, value string) Err {
-	kv.K2V[key2shard(key)][key] = value
-	return OK
-}
-
-func (kv *KV) Append(key string, value string) Err {
-	kv.K2V[key2shard(key)][key] += value
-	return OK
-}
-
-func (kv *KV) Migrate(shardId int, shard map[string]string) Err {
+func (kv *ShardKV) Migrate(shardId int, shard map[string]string) Err {
 	kv.K2V[shardId] = make(map[string]string)
 	for k, v := range shard {
 		kv.K2V[shardId][k] = v
@@ -114,7 +87,7 @@ func (kv *KV) Migrate(shardId int, shard map[string]string) Err {
 	return OK
 }
 
-func (kv *KV) Copy(shardId int) map[string]string {
+func (kv *ShardKV) Copy(shardId int) map[string]string {
 	res := make(map[string]string)
 	for k, v := range kv.K2V[shardId] {
 		res[k] = v
@@ -122,7 +95,7 @@ func (kv *KV) Copy(shardId int) map[string]string {
 	return res
 }
 
-func (kv *KV) Remove(shardId int) Err {
+func (kv *ShardKV) Remove(shardId int) Err {
 	kv.K2V[shardId] = make(map[string]string)
 	return OK
 }
@@ -132,34 +105,26 @@ func (kv *ShardKV) Get(args *CommandArgs, reply *CommandReply) {
 	kv.Command(args, reply)
 }
 
-func (kv *ShardKV) applyStateMachine(op *KVOp) {
-	switch op.Command {
-	case PUT:
-		kv.StateMachine.Put(op.Key, op.Value)
-	case APPEND:
-		kv.StateMachine.Append(op.Key, op.Value)
-	}
-}
-
 func (kv *ShardKV) PutAppend(args *CommandArgs, reply *CommandReply) {
 	// Your code here.
 	kv.Command(args, reply)
 }
 
-func (kv *ShardKV) CheckGroup(key string) bool {
-	return kv.newConfig.Shards[key2shard(key)] == kv.gid
+func (kv *ShardKV) CheckGroup(shardId int) bool {
+	return kv.newConfig.Shards[shardId] == kv.gid &&
+		kv.ShardState[shardId] == OK
 }
 
 func (kv *ShardKV) Command(args *CommandArgs, reply *CommandReply) {
 
 	kv.mu.Lock()
 
-	shardId := key2shard(args.Key)
-	if kv.newConfig.Shards[shardId] != kv.gid || kv.ShardState[shardId] != OK {
+	if !kv.CheckGroup(key2shard(args.Key)) {
 		reply.Err = ErrWrongGroup
 		kv.mu.Unlock()
 		return
 	}
+	kv.mu.Unlock()
 
 	intcmd := 0
 	switch args.Op {
@@ -180,11 +145,9 @@ func (kv *ShardKV) Command(args *CommandArgs, reply *CommandReply) {
 	index, _, isLeader := kv.rf.Start(Op{ShardValid: false, Cmd: op})
 	if !isLeader {
 		reply.Err = ErrWrongLeader
-		kv.mu.Unlock()
 		return
 	}
 	ch := kv.GetChan(index)
-	kv.mu.Unlock()
 	select {
 	case app := <-ch:
 		if app.ClientId != op.ClientId || app.Seq != op.Seq {
@@ -199,11 +162,9 @@ func (kv *ShardKV) Command(args *CommandArgs, reply *CommandReply) {
 		reply.Err = ErrWrongLeader
 	}
 
-	go func() {
-		kv.mu.Lock()
-		delete(kv.chans, index)
-		kv.mu.Unlock()
-	}()
+	kv.mu.Lock()
+	delete(kv.chans, index)
+	kv.mu.Unlock()
 }
 
 func (kv *ShardKV) apply() {
@@ -222,7 +183,7 @@ func (kv *ShardKV) apply() {
 					{
 
 						if kv.ShardNum[op.ShardId] < op.Num && kv.ShardState[op.ShardId] != OK {
-							kv.StateMachine.Migrate(op.ShardId, op.DB)
+							kv.Migrate(op.ShardId, op.DB)
 							delete(kv.Shard2Client, op.ShardId)
 							for k, v := range op.Client2Seq {
 								if kv.Client2Seq[k] < v {
@@ -263,7 +224,7 @@ func (kv *ShardKV) apply() {
 							for shardid, gid := range kv.newConfig.Shards {
 								if gid != kv.gid && kv.oldConfig.Shards[shardid] == kv.gid {
 									if kv.ShardState[shardid] == OK {
-										CloneMap := kv.StateMachine.Copy(shardid)
+										CloneMap := kv.Copy(shardid)
 										if len(CloneMap) == 0 {
 											delete(kv.OutedData[op.Config.Num-1], shardid)
 										} else {
@@ -278,7 +239,7 @@ func (kv *ShardKV) apply() {
 
 										}
 
-										kv.StateMachine.Remove(shardid)
+										kv.Remove(shardid)
 										kv.ShardState[shardid] = Not
 										kv.ShardNum[shardid] = op.Config.Num
 									}
@@ -306,8 +267,8 @@ func (kv *ShardKV) apply() {
 						}
 						if tmp == OK && kv.ShardNum[op.ShardId] == op.Num {
 
-							reply.DB = kv.StateMachine.Copy(op.ShardId)
-							CloneMap := kv.StateMachine.Copy(op.ShardId)
+							reply.DB = kv.Copy(op.ShardId)
+							CloneMap := kv.Copy(op.ShardId)
 							if len(CloneMap) == 0 {
 								delete(kv.OutedData[op.Num], op.ShardId)
 							} else {
@@ -321,7 +282,7 @@ func (kv *ShardKV) apply() {
 								}
 
 							}
-							kv.StateMachine.Remove(op.ShardId)
+							kv.Remove(op.ShardId)
 							kv.ShardState[op.ShardId] = Not
 							kv.ShardNum[op.ShardId] = op.Num
 
@@ -369,7 +330,7 @@ func (kv *ShardKV) apply() {
 				continue
 			}
 			op := tmp.Cmd.(KVOp)
-			if !kv.CheckGroup(op.Key) || kv.ShardState[key2shard(op.Key)] != OK {
+			if !kv.CheckGroup(key2shard(op.Key)) {
 				kv.mu.Unlock()
 				continue
 			}
@@ -379,17 +340,26 @@ func (kv *ShardKV) apply() {
 			}
 
 			kv.LastApplied = ch.CommandIndex
+			kv.mu.Unlock()
 			opchan := kv.GetChan(ch.CommandIndex)
+			kv.mu.Lock()
 
 			if kv.Client2Seq[op.ClientId] < op.Seq {
 
-				kv.applyStateMachine(&op)
+				shardId := key2shard(op.Key)
+				switch op.Command {
+				case PUT:
+					kv.K2V[shardId][op.Key] = op.Value
+				case APPEND:
+					kv.K2V[shardId][op.Key] += op.Value
+				}
 				kv.Client2Seq[op.ClientId] = op.Seq
-				if len(kv.Shard2Client[key2shard(op.Key)]) == 0 {
-					kv.Shard2Client[key2shard(op.Key)] = make([]int64, 0)
+
+				if len(kv.Shard2Client[shardId]) == 0 {
+					kv.Shard2Client[shardId] = make([]int64, 0)
 				}
 				flag := 0
-				for _, v := range kv.Shard2Client[key2shard(op.Key)] {
+				for _, v := range kv.Shard2Client[shardId] {
 					if v == op.ClientId {
 						flag = 1
 						break
@@ -406,7 +376,7 @@ func (kv *ShardKV) apply() {
 
 			}
 			if op.Command == GET {
-				op.Value, _ = kv.StateMachine.Get(op.Key)
+				op.Value = kv.K2V[key2shard(op.Key)][op.Key]
 			}
 
 			kv.mu.Unlock()
@@ -688,7 +658,7 @@ func (kv *ShardKV) DecodeSnapShot(snapshot []byte) {
 	r := bytes.NewBuffer(snapshot)
 	d := labgob.NewDecoder(r)
 
-	var db KV
+	var db [shardctrler.NShards]map[string]string
 
 	var Client2Seq map[int64]int
 	var preconfig shardctrler.Config
@@ -706,7 +676,7 @@ func (kv *ShardKV) DecodeSnapShot(snapshot []byte) {
 		d.Decode(&OutedData) != nil ||
 		d.Decode(&Shard2Client) != nil {
 	} else {
-		kv.StateMachine = &db
+		kv.K2V = db
 
 		kv.Client2Seq = Client2Seq
 		kv.newConfig = preconfig
@@ -724,7 +694,7 @@ func (kv *ShardKV) PersistSnapShot() []byte {
 
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
-	e.Encode(kv.StateMachine)
+	e.Encode(kv.K2V)
 	e.Encode(kv.Client2Seq)
 	e.Encode(kv.newConfig)
 	e.Encode(kv.oldConfig)
@@ -784,7 +754,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 	kv.Client2Seq = make(map[int64]int)
 	kv.chans = make(map[int]chan KVOp)
 
-	kv.StateMachine = &KV{[shardctrler.NShards]map[string]string{}}
+	kv.K2V = [shardctrler.NShards]map[string]string{}
 	kv.OutedData = make(map[int]map[int]map[string]string)
 	kv.oldConfig = shardctrler.Config{Num: 0, Groups: map[int][]string{}}
 	kv.newConfig = shardctrler.Config{Num: 0, Groups: map[int][]string{}}
@@ -804,6 +774,8 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister,
 }
 
 func (kv *ShardKV) GetChan(index int) chan KVOp {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
 
 	ch, exist := kv.chans[index]
 	if !exist {
