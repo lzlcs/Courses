@@ -1,0 +1,17 @@
+[
+{
+  "directory": "/home/lozical/courses/GAMES101/build",
+  "command": "/usr/bin/clang++-13  -isystem /usr/local/include/opencv4 -g -std=gnu++17 -o CMakeFiles/Rasterizer.dir/main.cpp.o -c /home/lozical/courses/GAMES101/hw1/main.cpp",
+  "file": "/home/lozical/courses/GAMES101/hw1/main.cpp"
+},
+{
+  "directory": "/home/lozical/courses/GAMES101/build",
+  "command": "/usr/bin/clang++-13  -isystem /usr/local/include/opencv4 -g -std=gnu++17 -o CMakeFiles/Rasterizer.dir/rasterizer.cpp.o -c /home/lozical/courses/GAMES101/hw1/rasterizer.cpp",
+  "file": "/home/lozical/courses/GAMES101/hw1/rasterizer.cpp"
+},
+{
+  "directory": "/home/lozical/courses/GAMES101/build",
+  "command": "/usr/bin/clang++-13  -isystem /usr/local/include/opencv4 -g -std=gnu++17 -o CMakeFiles/Rasterizer.dir/Triangle.cpp.o -c /home/lozical/courses/GAMES101/hw1/Triangle.cpp",
+  "file": "/home/lozical/courses/GAMES101/hw1/Triangle.cpp"
+}
+]

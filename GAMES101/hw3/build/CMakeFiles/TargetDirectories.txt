@@ -1,0 +1,3 @@
+/home/lozical/courses/GAMES101/hw3/build/CMakeFiles/Rasterizer.dir
+/home/lozical/courses/GAMES101/hw3/build/CMakeFiles/edit_cache.dir
+/home/lozical/courses/GAMES101/hw3/build/CMakeFiles/rebuild_cache.dir

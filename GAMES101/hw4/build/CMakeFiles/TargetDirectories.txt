@@ -1,0 +1,3 @@
+/home/lozical/courses/GAMES101/hw4/build/CMakeFiles/BezierCurve.dir
+/home/lozical/courses/GAMES101/hw4/build/CMakeFiles/edit_cache.dir
+/home/lozical/courses/GAMES101/hw4/build/CMakeFiles/rebuild_cache.dir
