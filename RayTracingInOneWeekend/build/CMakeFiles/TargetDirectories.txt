@@ -1,0 +1,3 @@
+/home/lozical/courses/RayTracingInOneWeekend/build/CMakeFiles/RayTracing.dir
+/home/lozical/courses/RayTracingInOneWeekend/build/CMakeFiles/edit_cache.dir
+/home/lozical/courses/RayTracingInOneWeekend/build/CMakeFiles/rebuild_cache.dir
