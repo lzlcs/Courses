@@ -56,7 +56,7 @@ scp -i path/to/key_name.pem ubuntu@<public_dns_name>:/path/to/file /path/to/loca
 ### Stopping the VM ###
 
 10. You can stop the VM by navigating to the instance page, clicking "Instance state", and then selecting "Stop instance".
-![Stop instance](figs/stop_instance.png?raw=true)
+![Stop instance](figs/killedinstance.png?raw=true)
 
 Note that terminating the instance will delete the instance and all associated files. Instances can be stopped in the AWS web console or by running `sudo shutdown -P now` while logged in.
 

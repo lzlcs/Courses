@@ -16,7 +16,7 @@
   There are several task systems in this file, built using:
     - Microsoft's Concurrency Runtime (ISPC_USE_CONCRT)
     - Apple's Grand Central Dispatch (ISPC_USE_GCD)
-    - bare pthreads (ISPC_USE_PTHREADS, ISPC_USE_PTHREADS_FULLY_SUBSCRIBED)
+    - bare pthreads (ISPC_USE_PTHREADS, ISPC_USE_PthreadsFULLY_SUBSCRIBED)
     - TBB (ISPC_USE_TBB_TASK_GROUP, ISPC_USE_TBB_PARALLEL_FOR)
     - OpenMP (ISPC_USE_OMP)
     - HPX (ISPC_USE_HPX)
@@ -30,12 +30,12 @@
 #define ISPC_USE_GCD
 #define ISPC_USE_CONCRT
 #define ISPC_USE_PTHREADS
-#define ISPC_USE_PTHREADS_FULLY_SUBSCRIBED
+#define ISPC_USE_PthreadsFULLY_SUBSCRIBED
 #define ISPC_USE_OMP
 #define ISPC_USE_TBB_TASK_GROUP
 #define ISPC_USE_TBB_PARALLEL_FOR
 
-  The ISPC_USE_PTHREADS_FULLY_SUBSCRIBED model essentially takes over the machine
+  The ISPC_USE_PthreadsFULLY_SUBSCRIBED model essentially takes over the machine
   by assigning one pthread to each hyper-thread, and then uses spinlocks and atomics
   for task management.  This model is useful for KNC where tasks can take over
   the machine, but less so when there are other tasks that need running on the machine.
@@ -51,7 +51,7 @@
 */
 
 #if !(defined ISPC_USE_CONCRT || defined ISPC_USE_GCD || defined ISPC_USE_PTHREADS ||                                  \
-      defined ISPC_USE_PTHREADS_FULLY_SUBSCRIBED || defined ISPC_USE_TBB_TASK_GROUP ||                                 \
+      defined ISPC_USE_PthreadsFULLY_SUBSCRIBED || defined ISPC_USE_TBB_TASK_GROUP ||                                 \
       defined ISPC_USE_TBB_PARALLEL_FOR || defined ISPC_USE_OMP || defined ISPC_USE_HPX)
 
 // If no task model chosen from the compiler cmdline, pick a reasonable default
@@ -99,7 +99,7 @@ using namespace Concurrency;
 #include <unistd.h>
 #include <vector>
 #endif // ISPC_USE_PTHREADS
-#ifdef ISPC_USE_PTHREADS_FULLY_SUBSCRIBED
+#ifdef ISPC_USE_PthreadsFULLY_SUBSCRIBED
 #include <algorithm>
 #include <errno.h>
 #include <fcntl.h>
@@ -112,7 +112,7 @@ using namespace Concurrency;
 #include <vector>
 //#include <stdexcept>
 #include <stack>
-#endif // ISPC_USE_PTHREADS_FULLY_SUBSCRIBED
+#endif // ISPC_USE_PthreadsFULLY_SUBSCRIBED
 #ifdef ISPC_USE_TBB_PARALLEL_FOR
 #include <tbb/parallel_for.h>
 #endif // ISPC_USE_TBB_PARALLEL_FOR
@@ -940,7 +940,7 @@ inline void TaskGroup::Sync() {
 #endif
 ///////////////////////////////////////////////////////////////////////////
 
-#ifndef ISPC_USE_PTHREADS_FULLY_SUBSCRIBED
+#ifndef ISPC_USE_PthreadsFULLY_SUBSCRIBED
 
 #define MAX_FREE_TASK_GROUPS 64
 static TaskGroup *freeTaskGroups[MAX_FREE_TASK_GROUPS];
@@ -1018,7 +1018,7 @@ void *ISPCAlloc(void **taskGroupPtr, int64_t size, int32_t alignment) {
     return taskGroup->AllocMemory(size, alignment);
 }
 
-#else // ISPC_USE_PTHREADS_FULLY_SUBSCRIBED
+#else // ISPC_USE_PthreadsFULLY_SUBSCRIBED
 
 #define MAX_LIVE_TASKS 1024
 
@@ -1243,4 +1243,4 @@ void *ISPCAlloc(void **taskGroupPtr, int64_t size, int32_t alignment) {
     return task->data; //*taskGroupPtr;
 }
 
-#endif // ISPC_USE_PTHREADS_FULLY_SUBSCRIBED
+#endif // ISPC_USE_PthreadsFULLY_SUBSCRIBED

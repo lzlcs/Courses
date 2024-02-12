@@ -67,12 +67,12 @@ class ThreadState {
         std::condition_variable* condition_variable_;
         std::mutex* mutex_;
         int counter_;
-        int num_waiting_threads_;
+        int num_waiting_threads;
         ThreadState(int num_waiting_threads) {
             condition_variable_ = new std::condition_variable();
             mutex_ = new std::mutex();
             counter_ = 0;
-            num_waiting_threads_ = num_waiting_threads;
+            num_waiting_threads = num_waiting_threads;
         }
         ~ThreadState() {
             delete condition_variable_;
@@ -84,7 +84,7 @@ void signal_fn(ThreadState* thread_state) {
     // Acquire mutex to make sure the shared counter is read in a
     // consistent state.
     thread_state->mutex_->lock();
-    while (thread_state->counter_ < thread_state->num_waiting_threads_) {
+    while (thread_state->counter_ < thread_state->num_waiting_threads) {
         thread_state->mutex_->unlock();
         // Release the mutex before calling `notify_all()` to make sure
         // waiting threads have a chance to make progress.

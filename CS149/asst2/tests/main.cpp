@@ -112,9 +112,9 @@ int main(int argc, char** argv)
         "spin_between_run_calls_async",
         "simple_run_deps_test",
         "strict_diamond_deps_async",
-        "strict_graph_deps_small_async",
-        "strict_graph_deps_med_async",
-        "strict_graph_deps_large_async",
+        "strict_Gdeps_small_async",
+        "strict_Gdeps_med_async",
+        "strict_Gdeps_large_async",
     };
  
     // Parse commandline options

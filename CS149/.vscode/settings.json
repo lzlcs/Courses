@@ -61,7 +61,7 @@
         "shared_mutex": "cpp",
         "sstream": "cpp",
         "stdexcept": "cpp",
-        "stop_token": "cpp",
+        "killedtoken": "cpp",
         "streambuf": "cpp",
         "cfenv": "cpp",
         "cinttypes": "cpp",
